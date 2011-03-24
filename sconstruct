@@ -1,0 +1,78 @@
+#!/usr/bin/scons
+
+import os, sys
+python_version = 'python%d.%d' % sys.version_info[:2]
+
+env = Environment()
+
+# libyandex-smartrouting.so
+libyandex_smartrouting = env.SharedLibrary(
+    target = "lib/yandex-smartrouting",
+    source = ["src/smartrouting.cpp"],
+    CPPPATH = ['include', '/usr/include'],
+    CXXFLAGS = ["-rdynamic", "-O2", "-Wall", "-pedantic", "-pthread", "-DLOKI_CLASS_LEVEL_THREADING", "-DPIC"],
+    LINKFLAGS = ['-Wl,-Bsymbolic', '-Wl,-soname=libyandex-smartrouting.so.1'])
+
+# libyandex-smartrouting.a
+libyandex_smartrouting_static = env.StaticLibrary(
+    target = "lib/yandex-smartrouting",
+    source = ["src/smartrouting.cpp"],
+    CPPPATH = ['include', '/usr/include'],
+    CXXFLAGS = ["-O2", "-Wall", "-pedantic", "-pthread", "-DLOKI_CLASS_LEVEL_THREADING"])
+
+# libyandex-smartrouting python bindings
+libyandex_smartrouting_python = env.SharedLibrary(
+    target = "python/_smartrouting",
+    source = ["src/smartrouting-python.cpp"],
+    CPPPATH = ['include', '/usr/include', os.path.join('/', 'usr', 'include', python_version)],
+    LIBS = ['boost_python', python_version, 'yandex-smartrouting'],
+    LIBPATH = ['./lib', '/usr/lib'],
+    CXXFLAGS = ["-rdynamic", "-O2", "-Wall", "-pedantic", "-pthread", "-DLOKI_CLASS_LEVEL_THREADING", "-DPIC"],
+    SHLIBPREFIX = '',
+    LINKFLAGS = ['-Wl,-Bsymbolic'])
+
+# libyandex-memcached.so
+libyandex_memcached = env.SharedLibrary(
+    target = "lib/yandex-memcached",
+    source = ["src/cache.cpp"],
+    CPPPATH = ['include', '/usr/include'],
+    LIBS = ['memcached', 'memcachedutil', 'log4cxx', 'lzo2', 'yandex-smartrouting'],
+    LIBPATH = ['./lib', '/usr/lib'],
+    CXXFLAGS = ["-rdynamic", "-O2", "-Wall", "-pedantic", "-pthread", "-DLOKI_CLASS_LEVEL_THREADING", "-DPIC"],
+    LINKFLAGS = ['-Wl,-Bsymbolic', '-Wl,-soname=libyandex-memcached.so.1'])
+
+# libyandex-memcached.a
+libyandex_memcached_static = env.StaticLibrary(
+    target = "lib/yandex-memcached",
+    source = ["src/cache.cpp"],
+    CPPPATH = ['include', '/usr/include'],
+    LIBS = ['memcached', 'memcachedutil', 'log4cxx', 'lzo2', 'yandex-smartrouting'],
+    LIBPATH = ['./lib', '/usr/lib'],
+    CXXFLAGS = ["-O2", "-Wall", "-pedantic", "-pthread", "-DLOKI_CLASS_LEVEL_THREADING"])
+
+# libyandex-memcached python bindings
+libyandex_memcached_python = env.SharedLibrary(
+    target = "python/_memcached",
+    source = ["src/python.cpp"],
+    CPPPATH = ['include', '/usr/include', os.path.join('/', 'usr', 'include', python_version)],
+    LIBS = ['boost_python', python_version, 'log4cxx', 'yandex-memcached'],
+    LIBPATH = ['./lib', '/usr/lib'],
+    CXXFLAGS = ["-rdynamic", "-O2", "-Wall", "-pedantic", "-pthread", "-DPIC"],
+    SHLIBPREFIX = '',
+    LINKFLAGS = ['-Wl,-Bsymbolic'])
+
+development_headers = env.File(['include/cache.hpp', 'include/smartrouting.hpp'])
+
+# libyandex-memcached
+env.InstallAs('debian/libyandex-memcached1/usr/lib/libyandex-memcached.so.1.0.0', libyandex_memcached)
+env.InstallAs('debian/libyandex-memcached1/usr/lib/libyandex-smartrouting.so.1.0.0', libyandex_smartrouting)
+
+# libyandex-memcached-dev
+env.Install('debian/libyandex-memcached-dev/usr/lib', libyandex_memcached_static)
+env.Install('debian/libyandex-memcached-dev/usr/lib', libyandex_smartrouting_static)
+env.Install('debian/libyandex-memcached-dev/usr/include/libyandex-memcached', development_headers)
+
+# python support
+python_bindings = [env.Glob('python/*.py'), libyandex_memcached_python, libyandex_smartrouting_python]
+python_package_path = os.path.join('/', 'usr', 'lib', python_version, 'site-packages', 'lymc')
+env.Install('debian/libyandex-memcached1' + python_package_path, python_bindings)
