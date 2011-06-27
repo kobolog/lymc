@@ -35,6 +35,7 @@ namespace yandex { namespace memcached { namespace python {
         }
 
         dict results;
+        
         for(cache_map_t::const_iterator it = cache_map.begin(); it != cache_map.end(); ++it) {
             results.setdefault(it->first, it->second);
         }
@@ -61,6 +62,7 @@ namespace yandex { namespace memcached { namespace python {
         }
 
         dict results;
+        
         for(cache_map_t::const_iterator it = cache_map.begin(); it != cache_map.end(); ++it) {
             results.setdefault(it->first, it->second);
         }
@@ -87,8 +89,27 @@ namespace yandex { namespace memcached { namespace python {
         }
 
         list results;
+        
         for(cache_vector_t::const_iterator it = cache_vector.begin(); it != cache_vector.end(); ++it) {
             results.append(*it);
+        }
+
+        return results;
+    }
+
+    list ClientWrapper::get_stats() const {
+        list results;
+
+        stats_t stats = m_client->get_stats();
+
+        for(stats_t::const_iterator it = stats.begin(); it != stats.end(); ++it) {
+            dict counters;
+
+            for(cache_map_t::const_iterator kv = it->second.begin(); kv != it->second.end(); ++kv) {
+                counters[kv->first] = kv->second;
+            }
+
+            results.append(make_tuple(it->first, counters));
         }
 
         return results;
@@ -116,14 +137,14 @@ namespace yandex { namespace memcached { namespace python {
                 "Initializes with a list of servers",
                 args("servers")))
 
-            .def(init<const list&, bool>(
-                "Initializes with a list of servers and an option to disable smartrouting",
-                args("servers", "routing")))
-
             .def("configure", &ClientWrapper::configure,
                 "Sets various memcached behavior options",
                 args("self", "config"))
-            
+           
+            .def("locality", &ClientWrapper::locality,
+                "Gets the server group locality ratio",
+                args("self"))
+
             .def("get", &ClientWrapper::get,
                 "Fetches a single value from the cache",
                 args("self", "key"))
@@ -166,6 +187,10 @@ namespace yandex { namespace memcached { namespace python {
 
             .def("flush_all", &ClientWrapper::flush,
                 "Invalidates everything",
+                args("self"))
+
+            .def("get_stats", &ClientWrapper::get_stats,
+                "Fetch server pool statistics",
                 args("self"));
     }
 }}} // namespace Yandex::Memcached::Python

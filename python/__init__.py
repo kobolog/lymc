@@ -7,6 +7,7 @@ try:
 except ImportError:
     import pickle
     
+
 class Client(ClientBase):
     # Helper methods
     def _pickled(self, arg):
@@ -28,18 +29,15 @@ class Client(ClientBase):
             return arg
     
     # Basic initialization
-    def __init__(self, servers, routing = True):
+    def __init__(self, servers):
         self.autopickling = True
 
         if isinstance(servers, basestring):
             servers = [servers]
 
-        super(Client, self).__init__(servers, routing)
+        super(Client, self).__init__(servers)
     
-    def configure(self, config = {}, **kwargs):
-        if kwargs:
-            config.update(kwargs)
-        
+    def configure(self, config):
         try:
             self.autopickling = config.pop('autopickling')
         except KeyError:
@@ -133,4 +131,40 @@ class Client(ClientBase):
     update = set_multi
 
 
-__all__ = [Client]
+class ClientPool(object):
+    def __init__(self, groups):
+        self.groups = {}
+        
+        for group, servers in groups.iteritems():
+            client = Client(list(servers))
+            self.groups[group] = client
+
+        name, self.closest = max(self.groups.iteritems(),
+            key = lambda item: item[1].locality())
+
+    def configure(self, config):
+        [group.configure(config) for group in self.groups.itervalues()]
+        
+    def __getattr__(self, name):
+        return getattr(self.closest, name)
+
+    def __getitem__(self, key):
+        return self.closest[key]
+
+    def __setitem__(self, key, value):
+        self.closest.set(key, value)
+
+    def __delitem__(self, key):
+        self.closest.delete(key)
+
+    def __contains__(self, key):
+        return self.closest.get(key) is not None
+
+    def mass_invalidate(self, target):
+        if isinstance(target, (str, unicode)):
+            [group.delete(target) for group in self.groups.itervalues()]
+        else:
+            [group.delete_multi(target) for group in self.groups.itervalues()]
+
+
+__all__ = [Client, ClientPool]

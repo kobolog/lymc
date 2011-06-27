@@ -14,12 +14,7 @@ class YandexMemcachedCache(BaseMemcachedCache):
         if self.client:
             return client
 
-        if self._options:
-            routing = self._options.pop('routing', True)
-        else:
-            routing = True
-
-        client = self._lib.Client(self._servers, routing)
+        client = self._lib.Client(self._servers)
 
         if self._options:
             client.configure(self._options)

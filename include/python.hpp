@@ -88,11 +88,11 @@ namespace yandex { namespace memcached { namespace python {
             typedef boost::function<bool (Client*, const std::string&, const std::string&, time_t)> store_fn_t;
             typedef boost::function<void (Client*, cache_map_t&, time_t)> bulk_store_fn_t;
 
-            ClientWrapper(const list& servers, bool routing = true):
+            ClientWrapper(const list& servers):
                 m_client(NULL)
             {
                 stl_input_iterator<std::string> begin(servers), end;
-                m_client = new Client(std::vector<std::string>(begin, end), routing);
+                m_client = new Client(std::vector<std::string>(begin, end));
             }
 
             ~ClientWrapper() {
@@ -106,6 +106,10 @@ namespace yandex { namespace memcached { namespace python {
                     scoped_gil_locker lock;
                     m_client->configure(cfg_map);
                 }
+            }
+
+            double locality() {
+                return m_client->locality();
             }
             
             str get(const str& key) const;
@@ -141,6 +145,8 @@ namespace yandex { namespace memcached { namespace python {
             inline void flush() {
                 m_client->flush();
             }
+
+            list get_stats() const;
 
         private:
             bool store(store_fn_t store_fn, const str& key, const str& value, time_t expire);

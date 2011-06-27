@@ -17,7 +17,8 @@
 namespace yandex { namespace memcached {
     typedef std::vector<std::string> cache_vector_t;
     typedef std::map<std::string, std::string> cache_map_t;
-    
+    typedef std::map<std::string, cache_map_t> stats_t;
+
     typedef boost::function<memcached_return_t
             (memcached_st*, const char*, size_t, const char*, size_t, time_t, uint32_t)> store_fn_t;
 
@@ -32,6 +33,8 @@ namespace yandex { namespace memcached {
                 uint32_t threshold;
             } compression;
 
+            double locality;
+
             Config() {
                 // Default pool
                 pool.size = 5;
@@ -39,15 +42,22 @@ namespace yandex { namespace memcached {
 
                 // Disable compression
                 compression.threshold = std::numeric_limits<uint32_t>::max();
+
+                // Initial locality
+                locality = 0.0;
             }
     };
     
     class Client: private boost::noncopyable {
         public:
-            explicit Client(const std::vector<std::string>& servers, bool routing = true);
+            explicit Client(const std::vector<std::string>& servers);
             ~Client();
 
             void configure(const std::map<std::string, uint64_t>& config);
+
+            inline double locality() {
+                return m_config.locality;
+            }
 
             std::string get(const std::string& key);
             cache_map_t get_multi(const cache_vector_t& keys);
@@ -79,6 +89,8 @@ namespace yandex { namespace memcached {
             bool remove(const std::string& key);
             void remove_multi(cache_vector_t& cache_vector);
             void flush();
+
+            stats_t get_stats();
 
             template<typename K>
             inline std::string compose_key(const std::string& prefix, const K key) const {

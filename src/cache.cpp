@@ -13,13 +13,12 @@ namespace yandex { namespace memcached {
     using namespace yandex::helpers;
     using namespace boost::lambda;
 
-    Client::Client(const vector<string>& servers, bool routing):
+    Client::Client(const vector<string>& servers):
         m_pool(NULL),
         m_log(Logger::getLogger("ru.yandex.memcached")),
         m_config()
     {
         LOG4CXX_INFO(m_log, "initializing");
-        LOG4CXX_INFO(m_log, "routing: " << (routing ? "on" : "off"));
         
         memcached_return_t rc;
         wrap<memcached_st> memcached(NULL, memcached_free);
@@ -32,6 +31,7 @@ namespace yandex { namespace memcached {
         // Creating the initial memcached structure, which will be
         // converted to the pool later on
         memcached = memcached_create(NULL);
+
         if(!memcached.valid()) {
             LOG4CXX_FATAL(m_log, "failed to initialize libmemcached!");
             return;
@@ -39,31 +39,31 @@ namespace yandex { namespace memcached {
 
         // Parsing the server list
         vector<string> host;
-        bool local = false;
+        uint32_t locals = 0;
 
         for(vector<string>::const_iterator it = servers.begin(); it != servers.end(); ++it) {
             host.clear();
             boost::split(host, *it, boost::is_any_of(":"));
                 
             try {
-                local = !routing || smartrouting::is_same_subnet(host[0]);
-            } catch(const smartrouting::Exception& e) {
+                if(smartrouting::is_same_subnet(host[0])) {
+                    locals++;
+                }
+            } catch(const std::runtime_error& e) {
                 LOG4CXX_WARN(m_log, boost::format("skipping unroutable host %1%: %2%") % host[0] % e.what());
                 continue;
             }
 
-            if(local) {
-                LOG4CXX_INFO(m_log, boost::format("configuring server %1%") % host[0]);
-                
-                server_list = memcached_server_list_append(
-                    server_list.release(),
-                    host[0].c_str(),
-                    host.size() == 2 ? atoi(host[1].c_str()) : 11211,
-                    &rc);
-                
-                LOG4CXX_ASSERT(m_log, rc == MEMCACHED_SUCCESS, 
-                    boost::format("failed to initialize server %1%: %2%") % host[0] % memcached_strerror(*memcached, rc));
-            }
+            LOG4CXX_INFO(m_log, boost::format("configuring server %1%") % host[0]);
+            
+            server_list = memcached_server_list_append(
+                server_list.release(),
+                host[0].c_str(),
+                host.size() == 2 ? atoi(host[1].c_str()) : 11211,
+                &rc);
+            
+            LOG4CXX_ASSERT(m_log, rc == MEMCACHED_SUCCESS, 
+                boost::format("failed to initialize server %1%: %2%") % host[0] % memcached_strerror(*memcached, rc));
         }
 
         // Pushing it into the library
@@ -79,6 +79,9 @@ namespace yandex { namespace memcached {
             return;
         }
 
+        // Store the locality factor
+        m_config.locality = locals * 100.0 / memcached_server_count(*memcached);
+        
         // Creating the default pool
         m_pool = memcached_pool_create(memcached.release(), m_config.pool.size / 2, m_config.pool.size);
     }
@@ -101,6 +104,8 @@ namespace yandex { namespace memcached {
         memcached_return_t rc;
         map<string, memcached_behavior> behaviors = boost::assign::map_list_of
             ("no-block", MEMCACHED_BEHAVIOR_NO_BLOCK)
+            ("use-udp", MEMCACHED_BEHAVIOR_USE_UDP)
+            ("no-reply", MEMCACHED_BEHAVIOR_NOREPLY)
             ("cache-lookups", MEMCACHED_BEHAVIOR_CACHE_LOOKUPS)
             ("binary-protocol", MEMCACHED_BEHAVIOR_BINARY_PROTOCOL)
             ("consistent-hashing", MEMCACHED_BEHAVIOR_KETAMA)
@@ -349,6 +354,44 @@ namespace yandex { namespace memcached {
 
         LOG4CXX_ASSERT(m_log, rc == MEMCACHED_SUCCESS,
             error(__func__, *connection, rc));
+    }
+
+    namespace {
+        static memcached_return_t collector(
+                memcached_server_instance_st instance,
+                const char* key, size_t key_length,
+                const char* value, size_t value_length,
+                void* context)
+        {
+            boost::format name = boost::format("%1%:%2%") %
+                memcached_server_name(instance) %
+                memcached_server_port(instance);
+
+            stats_t* stats = reinterpret_cast<stats_t*>(context);
+            cache_map_t& counters = (*stats)[name.str()];
+            
+            counters.insert(std::make_pair(
+                std::string(key, key_length),
+                std::string(value, value_length)));
+
+            return MEMCACHED_SUCCESS;
+        }
+    }
+
+    stats_t Client::get_stats() {
+        memcached_return_t rc;
+        wrap<memcached_st> connection(
+            m_pool ? memcached_pool_pop(m_pool, m_config.pool.blocking, &rc) : NULL,
+            bind(memcached_pool_push, m_pool, _1));
+        stats_t result;
+    
+        if(!connection.valid()) {
+            return result;
+        }
+
+        memcached_stat_execute(*connection, NULL, collector, &result);
+
+        return result;
     }
 
     boost::format Client::error(const char* function, const memcached_st* connection, memcached_return_t code, const string& key) const {
