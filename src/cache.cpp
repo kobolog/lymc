@@ -133,7 +133,7 @@ namespace yandex { namespace memcached {
                 m_config.pool.blocking = it->second;
             } else if(it->first == "compression-threshold") {
                 m_config.compression.threshold = it->second;
-            } else if(it->first == "default-expiration-mininmum") {
+            } else if(it->first == "default-expiration-minimum") {
                 m_config.expiration.minimum = it->second;
             } else if(it->first == "default-expiration-maximum") {
                 m_config.expiration.maximum = it->second;
