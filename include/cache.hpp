@@ -35,6 +35,11 @@ namespace yandex { namespace memcached {
 
             double locality;
 
+            struct {
+                time_t minimum;
+                time_t maximum;
+            } expiration;
+
             Config() {
                 // Default pool
                 pool.size = 5;
@@ -45,6 +50,10 @@ namespace yandex { namespace memcached {
 
                 // Initial locality
                 locality = 0.0;
+
+                // Default expiration timeouts
+                expiration.minimum = 120;
+                expiration.maximum = 180;
             }
     };
     

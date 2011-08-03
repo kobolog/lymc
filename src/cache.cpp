@@ -133,6 +133,10 @@ namespace yandex { namespace memcached {
                 m_config.pool.blocking = it->second;
             } else if(it->first == "compression-threshold") {
                 m_config.compression.threshold = it->second;
+            } else if(it->first == "default-expiration-mininmum") {
+                m_config.expiration.minimum = it->second;
+            } else if(it->first == "default-expiration-maximum") {
+                m_config.expiration.maximum = it->second;
             } else {
                 LOG4CXX_WARN(m_log, boost::format("skipping unknown option %1%") % it->first);
             }
@@ -288,7 +292,7 @@ namespace yandex { namespace memcached {
             rc = store_fn(*connection, it->first.data(), it->first.length(),
                     compressed ? deflate.data() : it->second.data(),
                     compressed ? deflate.length() : it->second.length(),
-                    expire ? expire : rand() % 60 + 120,
+                    expire ? expire : rand() % (m_config.expiration.maximum - m_config.expiration.minimum) + m_config.expiration.minimum,
                     static_cast<uint64_t>(compressed ? it->second.length() : 0));
 
             if(rc == MEMCACHED_SUCCESS) {
