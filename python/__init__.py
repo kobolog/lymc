@@ -14,7 +14,7 @@ class Client(ClientBase):
         if not self.autopickling:
             return arg
 
-        if isinstance(arg, basestring):
+        if isinstance(arg, str):
             return arg
         else:
             return pickle.dumps(arg)
