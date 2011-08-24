@@ -161,10 +161,38 @@ class ClientPool(object):
         return self.closest.get(key) is not None
 
     def mass_invalidate(self, target):
+        failed = []
+
         if isinstance(target, (str, unicode)):
-            [group.delete(target) for group in self.groups.itervalues()]
+            for name, group in self.groups.iteritems():
+                tries_left = 3
+                
+                # This method returns False if the operation has failed
+                while not group.delete(target):
+                    tries_left -= 1
+
+                    if not tries_left:
+                        failed.append(name)
+                        break
         else:
-            [group.delete_multi(target) for group in self.groups.itervalues()]
+            for name, group in self.groups.iteritems():
+                tries_left = 3
+                keys = target.copy()
+
+                while True:
+                    # This method return a list of failed keys
+                    keys = group.delete_multi(keys)
+
+                    if not keys:
+                        break
+
+                    tries_left -= 1
+
+                    if not tries_left:
+                        failed.append(name)
+                        break
+
+        return failed
 
 
 __all__ = [Client, ClientPool]
