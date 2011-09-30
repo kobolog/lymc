@@ -177,7 +177,7 @@ class ClientPool(object):
         else:
             for name, group in self.groups.iteritems():
                 tries_left = 3
-                keys = target.copy()
+                keys = target[:]
 
                 while True:
                     # This method return a list of failed keys
