@@ -194,5 +194,38 @@ class ClientPool(object):
 
         return failed
 
+    def mass_set(self, **kws):
+        failed = []
+
+        if 'key' in kws and 'value' in kws:
+            for name, group in self.groups.iteritems():
+                tries_left = 3
+
+                while not group.set(kws['key'], kws['value'], kws.get('expire', 0)):
+                    tries_left -= 1
+
+                    if not tries_left:
+                        failed.append(name)
+                        break
+        elif 'items' in kws:
+            for name, group in self.groups.iteritems():
+                tries_left = 3
+                items = kws['items'].copy()
+
+                while True:
+                    items = group.set_multi(items, kws.get('expire', 0))
+
+                    if not items:
+                        break
+
+                    tries_left -= 1
+
+                    if not tries_left:
+                        failed.append(name)
+                        break
+        else:
+            raise KeyError, "Neither key-value pair nor items are given" 
+    
+        return failed
 
 __all__ = [Client, ClientPool]

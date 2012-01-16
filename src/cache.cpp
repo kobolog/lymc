@@ -334,11 +334,10 @@ namespace yandex { namespace memcached {
 
             rc = memcached_delete(*connection, it->data(), it->length(), static_cast<time_t>(0));
             
-            if(rc == MEMCACHED_SUCCESS) {
+            if(rc == MEMCACHED_SUCCESS || rc == MEMCACHED_NOTFOUND) {
                 it = cache_vector.erase(it);
             } else {
-                LOG4CXX_ASSERT(m_log, rc == MEMCACHED_NOTFOUND,
-                    error(__func__, *connection, rc, *it));
+                LOG4CXX_ERROR(m_log, error(__func__, *connection, rc, *it));
                 ++it;
             }
         }
